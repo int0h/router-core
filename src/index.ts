@@ -1,153 +1,95 @@
-export type Pattern<Params extends string> = Array<{$: Params} | string> | string;
+import {Route, Data} from './route';
+export {Route, route} from './route';
 
-export interface RouteData<Params extends string> {
-    params?: {[key in Params]: Param | RegExp}
+export interface RouteView {
+    routeName: string;
+    route: Route<string>;
+    data: Data<string>;
 }
 
-export function route<Params extends string>(pattern: Pattern<Params>, config: RouteData<Params>): Route<Params> {
-    return new Route(pattern, config);
-}
+export type TransitionType = 'routeChange' | 'pathChange' | 'paramChange';
 
-export type Data<Params extends string> = {
-    [key in Params]: any;
-}
-
-export type Param = {
-    re?: RegExp;
-    //isNumber?: boolean;
-    validator?: (s: string) => boolean;
-    // acceptSlashes?: boolean;
-};
-
-function parseSimpleParam(url: string, offset: number): string | null {
-    let end = url.lastIndexOf('/', offset) + offset;
-    if (end === -1) {
-        end = url.length;
-    }
-    const str = url.slice(offset, end);
-    return str || null;
-}
-
-function parseParam(param: Param, url: string, offset: number): string | null {
-    const simple = parseSimpleParam(url, offset);
-
-    if (simple === null) {
-        return null;
-    }
-
-    if (param.re && !param.re.test(simple)) {
-        null;
-    }
-
-    // if (param.isNumber) {
-    //     const num = Number(simple);
-    //     if (isNaN(num)) {
-    //         return null;
-    //     }
-    //     return num;
-    // }
-
-    return simple;
-}
-
-export class Route<Params extends string> {
-    pattern: Pattern<Params>;
-    params: {[key in Params]: Param};
-
-    constructor(pattern: Pattern<Params>, cfg: RouteData<Params>) {
-        this.pattern = pattern;
-
-        this.params = {} as any;
-        if (cfg.params) {
-            for (const name in cfg.params) {
-                let param = cfg.params[name] as RegExp | Param;
-
-                if (param instanceof RegExp) {
-                    param = {re: param};
-                }
-
-                this.params[name] = param;
-            }
-        }
-    }
-
-    stringify(data: {[key in Params]: string}): string {
-        if (typeof this.pattern === 'string') {
-            return this.pattern;
-        }
-
-        return '/' + this.pattern.map(part => {
-            if (typeof part === 'string') {
-                return part;
-            }
-
-            return data[part.$];
-        }).join('/');
-    }
-
-    parse(url: string): Data<Params> | null {
-        let urlOffset = 0;
-        let data = {} as Data<Params>;
-
-        for (const part of this.pattern) {
-            if (typeof part === 'string') {
-                urlOffset = url.indexOf('/' + part);
-                if (urlOffset !== 0) {
-                    return null;
-                }
-                urlOffset += part.length + 1;
-                continue;
-            }
-            const paramName = part.$;
-            const param = this.params[paramName];
-            const founded = parseParam(param, url, urlOffset);
-            if (founded === null) {
-                return null;
-            }
-            data[paramName] = founded;
-            urlOffset += founded.length;
-        }
-
-        return data;
-    }
-
-}
-
-export class Router<Routes extends {[key: string]: Route<string>}> {
+export abstract class Router<Routes extends {[key: string]: Route<string>}> {
     routes: Routes;
+    currentView: RouteView;
 
     constructor(routes: Routes) {
         this.routes = routes;
+        for (const name in routes) {
+            routes[name].name = name;
+        }
     }
 
-    // stringify<Name extends keyof Routes>(name: Name, data: {[key in Routes[Name]['params']]: string}): string {
-    //     const route = this.routes[name];
+    match(url: string): Data<string> | null {
+        for (const routeName in this.routes) {
+            const parsed = this.routes[routeName].parse(url);
+            if (parsed) {
+                return {
+                    routeName,
+                    route: this.routes[routeName],
+                    parsed
+                };
+            }
+        }
+        return null;
+    }
 
-    //     if (!route) {
-    //         throw new Error(`Route '${name}' is not found!`);
-    //     }
+    private resolveRoute<N extends keyof Routes, P extends string>(route: Route<P> | N): Route<string> {
+        const found = typeof route === 'string'
+            ? this.routes[route]
+            : route;
 
-    //     if (typeof route.pattern === 'string') {
-    //         return route.pattern;
-    //     }
+        if (!found) {
+            throw new Error(`Route [${route}] is not found`);
+        }
 
-    //     return route.pattern.map(part => {
-    //         if (typeof part === 'string') {
-    //             return part;
-    //         }
+        return found;
+    }
 
-    //         return data[part.$];
-    //     }).join('/');
-    // }
+    build<N extends keyof Routes, P extends string>(route: Route<P> | N, data: Data<P>) {
+        return this.resolveRoute(route).stringify(data);
+    }
+
+    init<N extends keyof Routes, P extends string>(route: Route<P> | N, data: Data<P>) {
+        this.go(route, data, true);
+    }
+
+    go<N extends keyof Routes, P extends string>(route: Route<P> | N, data: Data<P>, silent?: boolean) {
+        const resolved = this.resolveRoute(route);
+
+        const newCW = {
+            routeName: resolved.name,
+            route: resolved,
+            data: data
+        }
+
+        if (silent) {
+            this.currentView = newCW;
+            return;
+        }
+
+        let type: TransitionType;
+        if (this.currentView.route === resolved) {
+            const pathChanged = resolved.pathParams.some(paramName => {
+                return this.currentView.data[paramName] !== (data as any)[paramName];
+            });
+            type = pathChanged ? 'pathChange' : 'paramChange';
+        } else {
+            type = 'routeChange';
+        }
+
+        this.handleTransition(type, this.currentView, newCW);
+        this.currentView = newCW;
+    }
+
+    changeParams(dataDiff: Data<string>) {
+        const newData = Object.assign({}, this.currentView.data);
+        for (const name in dataDiff) {
+            newData[name] = dataDiff[name];
+        }
+        this.go(this.currentView.route, newData);
+    }
+
+    abstract handleTransition(type: TransitionType, oldCW: RouteView, newCW: RouteView): void;
+
 }
-
-// const router = new Router({
-//     foo: route(['sad', {$: 'a'}, {$: 'b'}], {
-//         params: {
-//             a: {},
-//             b: {}
-//         }
-//     })
-// });
-
-// router.routes.foo
