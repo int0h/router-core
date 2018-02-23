@@ -16,6 +16,7 @@
     "ts-node": "^5.0.0",
     "typescript": "^2.7.2"
   },
+  "typings": "./types/index.d.ts",
   "scripts": {
     "test": "nyc -e '.ts' -n 'src/' --all ts-node ./tests/index.ts ./node_modules/.bin/tape ./tests/index.ts | ./node_modules/.bin/tap-spec"
   }
