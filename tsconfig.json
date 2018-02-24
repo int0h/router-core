@@ -17,7 +17,6 @@
             "dom"
         ],
         "noUnusedLocals": true,
-        "noUnusedParameters": true,
         "experimentalDecorators": true
     },
     "include": [

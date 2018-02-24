@@ -2,25 +2,26 @@ import './route';
 
 import test = require('tape');
 
-import {Router as BaseRouter, Route, route, TransitionType, RouteView} from '../src';
+import {RouterCore as BaseRouter, Route, route, TransitionType, RouteView} from '../src';
 
 test('base', t => {
     let htCalledTimes = 0;
     let checker: Function;
 
-    class Router<Routes extends {[key: string]: Route<string>}> extends BaseRouter<Routes> {
-        handleTransition(type: TransitionType, oldCW: RouteView, newCW: RouteView){
-            htCalledTimes++;
-            checker(type, oldCW, newCW);
-        }
+    class Router<Routes extends {[key: string]: Route<string>}> extends BaseRouter<{}, Routes> {
     }
 
-    const router = new Router({
+    const router = new Router({}, {
         cart: route('/cart', {}),
         category: route(['catalog', {$: 'id'}], {})
     });
 
-    router.init('cart', {});
+    router.onTransition((type, oldCW, newCW) => {
+        htCalledTimes++;
+        checker(type, oldCW, newCW);
+    });
+
+    router.initWithRoute('cart', {});
 
     t.is(htCalledTimes, 0);
 
@@ -29,12 +30,14 @@ test('base', t => {
         t.deepEqual(oldCW, {
             routeName: 'cart',
             route: router.routes.cart,
-            data: {}
+            data: {},
+            state: {routeName: 'cart', data: {}}
         });
         t.deepEqual(newCW, {
             routeName: 'category',
             route: router.routes.category,
-            data: {id: '432'}
+            data: {id: '432'},
+            state: {routeName: 'category', data: {id: '432'}}
         });
     }
     router.go('category', {id: '432'});
@@ -45,12 +48,14 @@ test('base', t => {
         t.deepEqual(oldCW, {
             routeName: 'category',
             route: router.routes.category,
-            data: {id: '432'}
+            data: {id: '432'},
+            state: {routeName: 'category', data: {id: '432'}}
         });
         t.deepEqual(newCW, {
             routeName: 'category',
             route: router.routes.category,
-            data: {id: '123'}
+            data: {id: '123'},
+            state: {routeName: 'category', data: {id: '123'}}
         });
     }
     router.go('category', {id: '123'});
@@ -61,12 +66,14 @@ test('base', t => {
         t.deepEqual(oldCW, {
             routeName: 'category',
             route: router.routes.category,
-            data: {id: '123'}
+            data: {id: '123'},
+            state: {routeName: 'category', data: {id: '123'}}
         });
         t.deepEqual(newCW, {
             routeName: 'category',
             route: router.routes.category,
-            data: {id: '123', page: '2'}
+            data: {id: '123', page: '2'},
+            state: {routeName: 'category', data: {id: '123', page: '2'}}
         });
     }
     router.go('category', {id: '123', page: '2'});
@@ -77,12 +84,14 @@ test('base', t => {
         t.deepEqual(oldCW, {
             routeName: 'category',
             route: router.routes.category,
-            data: {id: '123', page: '2'}
+            data: {id: '123', page: '2'},
+            state: {routeName: 'category', data: {id: '123', page: '2'}}
         });
         t.deepEqual(newCW, {
             routeName: 'category',
             route: router.routes.category,
-            data: {id: '123', page: '3'}
+            data: {id: '123', page: '3'},
+            state: {routeName: 'category', data: {id: '123', page: '3'}}
         });
     }
     router.changeParams({page: '3'});

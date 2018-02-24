@@ -6,7 +6,9 @@ export interface RouteData<Params extends string> {
     params?: {[key in Params]: Param | RegExp}
 }
 
-export function route<Params extends string>(pattern: Pattern<Params> | string, config: RouteData<Params>): Route<Params> {
+export function route<Meta = {}, Params extends string = string>
+        (pattern: Pattern<Params> | string, config: RouteData<Params> & Meta): Route<Params, Meta>
+    {
     if (typeof pattern === 'string') {
         pattern = [trimSlashes(pattern)];
     }
@@ -32,13 +34,14 @@ function parseParam(param: Param, code: string): string | null {
     return code;
 }
 
-export class Route<Params extends string> {
+export class Route<Params extends string, Meta = {}> {
     pattern: Pattern<Params>;
     params: {[key in Params]: Param};
     pathParams: string[] = [];
     name: string;
+    meta = {} as Meta;
 
-    constructor(pattern: Pattern<Params>, cfg: RouteData<Params>) {
+    constructor(pattern: Pattern<Params>, cfg: RouteData<Params> & Meta) {
         this.pattern = pattern;
 
         this.pattern.forEach(item => {
@@ -143,7 +146,7 @@ export class Route<Params extends string> {
         return Object.assign({}, pathData, query);
     }
 
-    getData(data: Data<Params>): {routeName: string, data: Data<Params>} {
+    getState(data: Data<Params>): {routeName: string, data: Data<Params>} {
         return {data, routeName: this.name};
     }
 

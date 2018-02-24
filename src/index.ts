@@ -1,26 +1,47 @@
 import {Route, Data} from './route';
 export {Route, route, RouteData, Param, Data} from './route';
+export {handleHistory} from './browser';
 
-export interface RouteView<Params extends string> {
+export interface CVState {
     routeName: string;
-    route: Route<Params>;
-    data: Data<Params>;
+    data: Data<string>;
 }
+
+export interface RouteView<Params extends string = string, Meta = {}> {
+    routeName: string;
+    route: Route<Params, Meta>;
+    data: Data<Params>;
+    state: CVState;
+}
+
+export interface RouterConfig {
+    hashPrefix?: boolean;
+    noRouteRedirect?: {routeName: string, data: Data<string>};
+}
+
+export interface RouteTable<Meta = {}> {
+    [key: string]: Route<string, Meta>
+}
+
+export type TransitionHandler<Meta> = (type: TransitionType, oldCW: RouteView<string, Meta>, newCW: RouteView<string, Meta>, handleHistory: boolean) => void;
 
 export type TransitionType = 'routeChange' | 'pathChange' | 'paramChange';
 
-export abstract class RouterCore<Routes extends {[key: string]: Route<string>}> {
+export class RouterCore<Meta = {}, Routes extends RouteTable<Meta> = RouteTable<Meta>> {
+    cfg: RouterConfig;
     routes: Routes;
-    currentView: RouteView<string>;
+    currentView: RouteView<string, Meta>;
+    private transitionHandlers: Array<TransitionHandler<Meta>> = [];
 
-    constructor(routes: Routes) {
+    constructor(cfg: RouterConfig, routes: Routes) {
         this.routes = routes;
         for (const name in routes) {
             routes[name].name = name;
         }
+        this.cfg = cfg;
     }
 
-    private resolveRoute<N extends keyof Routes, P extends string>(route: Route<P> | N): Route<string> {
+    private resolveRoute<N extends keyof Routes, P extends string>(route: Route<P, Meta> | N): Route<string, Meta> {
         const found = typeof route === 'string'
             ? this.routes[route]
             : route;
@@ -36,31 +57,54 @@ export abstract class RouterCore<Routes extends {[key: string]: Route<string>}> 
         for (const routeName in this.routes) {
             const data = this.routes[routeName].parse(url);
             if (data) {
+                const route = this.routes[routeName];
+
                 return {
                     routeName,
-                    route: this.routes[routeName],
-                    data
+                    route,
+                    data,
+                    state: route.getState(data)
                 };
             }
         }
         return null;
     }
 
-    build<N extends keyof Routes, P extends string>(route: Route<P> | N, data: Data<P>) {
+    build<N extends keyof Routes, P extends string>(route: Route<P, Meta> | N, data: Data<P>) {
         return this.resolveRoute(route).stringify(data);
     }
 
-    init<N extends keyof Routes, P extends string>(route: Route<P> | N, data: Data<P>) {
+    initWithRoute<N extends keyof Routes, P extends string>(route: Route<P, Meta> | N, data: Data<P>) {
         this.go(route, data, true);
     }
 
-    go<N extends keyof Routes, P extends string>(route: Route<P> | N, data: Data<P>, silent?: boolean) {
+    init() {
+        const url = this.cfg.hashPrefix
+            ? location.hash.slice(1)
+            : location.href.slice(location.origin.length);
+
+        const currentView = this.match(url);
+
+        if (!currentView) {
+            if (this.cfg.noRouteRedirect) {
+                this.initWithRoute(this.cfg.noRouteRedirect.routeName, this.cfg.noRouteRedirect.data);
+            } else {
+                console.warn('bad route');
+            }
+            return;
+        }
+
+        this.initWithRoute(currentView.routeName, currentView.data);
+    }
+
+    go<N extends keyof Routes, P extends string>(route: Route<P, Meta> | N, data: Data<P>, silent?: boolean, handleHistory = true) {
         const resolved = this.resolveRoute(route);
 
         const newCW = {
             routeName: resolved.name,
             route: resolved,
-            data: data
+            data: data,
+            state: resolved.getState(data)
         }
 
         if (silent) {
@@ -78,7 +122,7 @@ export abstract class RouterCore<Routes extends {[key: string]: Route<string>}> 
             type = 'routeChange';
         }
 
-        this.handleTransition(type, this.currentView, newCW);
+        this.transitionHandlers.forEach(handler => handler(type, this.currentView, newCW, handleHistory));
         this.currentView = newCW;
     }
 
@@ -90,6 +134,7 @@ export abstract class RouterCore<Routes extends {[key: string]: Route<string>}> 
         this.go(this.currentView.route, newData);
     }
 
-    abstract handleTransition(type: TransitionType, oldCW: RouteView<string>, newCW: RouteView<string>): void;
-
+    onTransition(handler: TransitionHandler<Meta>) {
+        this.transitionHandlers.push(handler);
+    }
 }
