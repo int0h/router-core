@@ -4,7 +4,7 @@
   "description": "",
   "main": "./dist/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "nyc -e '.ts' -n 'src/' --all ts-node ./tests/index.ts ./node_modules/.bin/tape ./tests/index.ts | ./node_modules/.bin/tap-spec"
   },
   "author": "int0h",
   "license": "MIT",
@@ -16,8 +16,5 @@
     "ts-node": "^5.0.0",
     "typescript": "^2.7.2"
   },
-  "typings": "./types/index.d.ts",
-  "scripts": {
-    "test": "nyc -e '.ts' -n 'src/' --all ts-node ./tests/index.ts ./node_modules/.bin/tape ./tests/index.ts | ./node_modules/.bin/tap-spec"
-  }
+  "typings": "./types/index.d.ts"
 }

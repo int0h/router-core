@@ -1,37 +1,23 @@
 import {Route, Data} from './route';
-export {Route, route} from './route';
+export {Route, route, RouteData, Param, Data} from './route';
 
-export interface RouteView {
+export interface RouteView<Params extends string> {
     routeName: string;
-    route: Route<string>;
-    data: Data<string>;
+    route: Route<Params>;
+    data: Data<Params>;
 }
 
 export type TransitionType = 'routeChange' | 'pathChange' | 'paramChange';
 
-export abstract class Router<Routes extends {[key: string]: Route<string>}> {
+export abstract class RouterCore<Routes extends {[key: string]: Route<string>}> {
     routes: Routes;
-    currentView: RouteView;
+    currentView: RouteView<string>;
 
     constructor(routes: Routes) {
         this.routes = routes;
         for (const name in routes) {
             routes[name].name = name;
         }
-    }
-
-    match(url: string): Data<string> | null {
-        for (const routeName in this.routes) {
-            const parsed = this.routes[routeName].parse(url);
-            if (parsed) {
-                return {
-                    routeName,
-                    route: this.routes[routeName],
-                    parsed
-                };
-            }
-        }
-        return null;
     }
 
     private resolveRoute<N extends keyof Routes, P extends string>(route: Route<P> | N): Route<string> {
@@ -44,6 +30,20 @@ export abstract class Router<Routes extends {[key: string]: Route<string>}> {
         }
 
         return found;
+    }
+
+    match(url: string): RouteView<string> | null {
+        for (const routeName in this.routes) {
+            const data = this.routes[routeName].parse(url);
+            if (data) {
+                return {
+                    routeName,
+                    route: this.routes[routeName],
+                    data
+                };
+            }
+        }
+        return null;
     }
 
     build<N extends keyof Routes, P extends string>(route: Route<P> | N, data: Data<P>) {
@@ -90,6 +90,6 @@ export abstract class Router<Routes extends {[key: string]: Route<string>}> {
         this.go(this.currentView.route, newData);
     }
 
-    abstract handleTransition(type: TransitionType, oldCW: RouteView, newCW: RouteView): void;
+    abstract handleTransition(type: TransitionType, oldCW: RouteView<string>, newCW: RouteView<string>): void;
 
 }

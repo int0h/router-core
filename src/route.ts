@@ -14,7 +14,7 @@ export function route<Params extends string>(pattern: Pattern<Params> | string, 
 }
 
 export type Data<Params extends string> = {
-    [key in Params]: any;
+    [key in Params]: string | string[];
 }
 
 export type Param = {
@@ -61,7 +61,7 @@ export class Route<Params extends string> {
         }
     }
 
-    stringify(data: {[key in Params]: string | string[]}): string {
+    stringify(data: Data<Params>): string {
         let usedKeys: string[] = [];
 
         const path = '/' + this.pattern.map(part => {
@@ -141,6 +141,10 @@ export class Route<Params extends string> {
         }
 
         return Object.assign({}, pathData, query);
+    }
+
+    getData(data: Data<Params>): {routeName: string, data: Data<Params>} {
+        return {data, routeName: this.name};
     }
 
 }
